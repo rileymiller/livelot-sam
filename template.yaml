@@ -1,0 +1,446 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: S3 Uploader - LiveLot Snapshots
+
+####################################################################################################################################################
+### Shared Dependencies Layer
+####################################################################################################################################################
+Globals:
+  Function:
+    Layers:
+      # Our own layer that we are going to build
+      - !Ref RuntimeDependenciesLayer
+      # At the same time we can also reference third-party layers
+      # - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:464622532012:layer:Datadog-Node14-x:48"
+    Runtime: nodejs12.x
+    MemorySize: 128
+    Timeout: 100
+
+Resources:
+  ## Lambdas are like ogres, they have layers
+  RuntimeDependenciesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Metadata:
+      BuildMethod: makefile # This does the trick
+    Properties:
+      Description: Runtime dependencies for Lambdas
+      ContentUri: ./
+      CompatibleRuntimes:
+        - nodejs14.x
+      RetentionPolicy: Retain
+  ####################################################################################################################################################
+  ### User Service
+  ####################################################################################################################################################
+  CognitoApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Cors: "'*'"
+      Auth:
+        DefaultAuthorizer: MyCognitoAuthorizer
+        Authorizers:
+          MyCognitoAuthorizer:
+            UserPoolArn: !GetAtt UserPool.Arn
+
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: LiveLotUserPool
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+      UsernameAttributes:
+        - email
+
+  UserPoolTokenClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+
+  ## Dynamo DB Table
+  UserDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 3
+        WriteCapacityUnits: 3
+
+  AdminPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: LiveLotAdminPool
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          TemporaryPasswordValidityDays: 365
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      UsernameAttributes:
+        - email
+
+  AdminPoolTokenClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref AdminPool
+      GenerateSecret: false
+
+  AuthFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile # This does the trick
+    Properties:
+      FunctionName: !Sub aut-function
+      Handler: dist/handlers/user-auth.handler
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          USER_POOL_CLIENT_ID: !Ref UserPoolTokenClient
+          ADMIN_POOL_ID: !Ref AdminPool
+          ADMIN_POOL_CLIENT_ID: !Ref AdminPoolTokenClient
+
+      Events:
+        Signup:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CognitoApi
+            Path: /signup
+            Method: POST
+            Auth:
+              Authorizer: NONE
+        Signin:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CognitoApi
+            Path: /signin
+            Method: POST
+            Auth:
+              Authorizer: NONE
+        AdminSignin:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CognitoApi
+            Path: /admin/signin
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+  PreSignupFunction:
+    # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile # This does the trick
+    Properties:
+      Handler: dist/handlers/pre-signup.handler
+      Events:
+        CognitoUserPoolPreSignup:
+          Type: Cognito
+          Properties:
+            UserPool:
+              Ref: UserPool
+            Trigger: PreSignUp
+        CognitoAdminPoolPreSignup:
+          Type: Cognito
+          Properties:
+            UserPool:
+              Ref: AdminPool
+            Trigger: PreSignUp
+  PostSignupFunction:
+    # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile # This does the trick
+    Properties:
+      Handler: dist/handlers/post-signup.handler
+      Environment:
+        Variables:
+          DynamoTable: !Ref UserDBTable
+      Policies:
+        - AmazonDynamoDBFullAccess
+      Events:
+        CognitoUserPoolPostSignup:
+          Type: Cognito
+          Properties:
+            UserPool:
+              Ref: UserPool
+            Trigger: PostConfirmation
+  UserCreateFunction:
+    # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile # This does the trick
+    Properties:
+      FunctionName: !Sub user-create-function
+      Handler: dist/handlers/user-create.handler
+      Environment:
+        Variables:
+          DynamoTable: !Ref UserDBTable
+      Policies:
+        - AmazonDynamoDBFullAccess
+      Events:
+        CreateUserCameraEntryAPI:
+          Type: Api
+          Properties:
+            Path: /user/create
+            Method: POST
+            RestApiId: !Ref CognitoApi
+  UserGetAllFunction:
+    # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile # This does the trick
+    Properties:
+      FunctionName: !Sub user-get-all-function
+      Handler: dist/handlers/user-get-all.handler
+      Environment:
+        Variables:
+          DynamoTable: !Ref UserDBTable
+      Policies:
+        - AmazonDynamoDBFullAccess
+      Events:
+        CreateUserCameraEntryAPI:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CognitoApi
+            Path: /users
+            Method: GET
+            Auth:
+              Authorizer: MyCognitoAuthorizer
+              # Locked in as a Cognito User Endpoint
+  UserGetFunction:
+    # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile # This does the trick
+    Properties:
+      FunctionName: !Sub user-get-function
+      Handler: dist/handlers/user-get.handler
+      Environment:
+        Variables:
+          DynamoTable: !Ref UserDBTable
+      Policies:
+        - AmazonDynamoDBFullAccess
+      Events:
+        CreateUserCameraEntryAPI:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CognitoApi
+            Path: /user/{id}
+            Method: GET
+            Auth:
+              Authorizer: MyCognitoAuthorizer
+
+  UserUpdateFunction:
+    # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile # This does the trick
+    Properties:
+      FunctionName: !Sub user-update-function
+      Handler: dist/handlers/user-update.handler
+      Environment:
+        Variables:
+          DynamoTable: !Ref UserDBTable
+      Policies:
+        - AmazonDynamoDBFullAccess
+      Events:
+        CreateUserCameraEntryAPI:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CognitoApi
+            Path: /user/{id}
+            Method: PUT
+  # Lambda to delete user from user table
+  UserDeleteFunction:
+    # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile # This does the trick
+    Properties:
+      FunctionName: !Sub user-delete-function
+      Handler: dist/handlers/user-delete.handler
+      Environment:
+        Variables:
+          DynamoTable: !Ref UserDBTable
+      Policies:
+        - AmazonDynamoDBFullAccess
+      Events:
+        CreateUserCameraEntryAPI:
+          Type: Api
+          Properties:
+            RestApiId: !Ref CognitoApi
+            Path: /user/{id}
+            Method: DELETE
+  ####################################################################################################################################
+  ### Image Upload Service
+  ####################################################################################################################################
+  # HTTP API to upload our images
+  LiveLotSnapshotsAPI:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      # CORS configuration - this is open for development only and should be restricted in prod.
+      # See https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-httpapi-httpapicorsconfiguration.html
+      CorsConfiguration:
+        AllowMethods:
+          - GET
+          - POST
+          - DELETE
+          - OPTIONS
+        AllowHeaders:
+          - "*"
+        AllowOrigins:
+          - "*"
+  # ## Dynamo DB Table
+  ImageMetadataDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+  # ## S3 bucket
+  LiveLotUploadSnapshotS3:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub livelot-upload-bucket-${AWS::AccountId}
+      NotificationConfiguration:
+        TopicConfigurations:
+          - Event: s3:ObjectCreated:*
+            Topic: !Ref S3ObjectChangeEvent
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - "*"
+            AllowedMethods:
+              - GET
+              - PUT
+              - HEAD
+            AllowedOrigins:
+              - "*"
+    DependsOn:
+      - BucketToSNSPermission
+  S3ObjectChangeEvent:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub S3ObjectChanged-Topic-${AWS::AccountId}
+  BucketToSNSPermission:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref S3ObjectChangeEvent
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Sub arn:${AWS::Partition}:s3:::livelot-upload-bucket-${AWS::AccountId}
+      Topics:
+        - !Ref S3ObjectChangeEvent
+  ## Lambda functions
+  NotifyDetectionFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile # This does the trick
+    Properties:
+      FunctionName: !Sub notify-detection-function
+      Handler: dist/handlers/notify-detection.handler
+      # Tracing: Active
+      Policies:
+        - AmazonDynamoDBFullAccess
+      Environment:
+        Variables:
+          DynamoTable: !Ref UserDBTable
+      Events:
+        Topic:
+          Type: SNS
+          Properties:
+            Topic: !Ref S3ObjectChangeEvent
+            Region: !Select
+              - 3
+              - !Split
+                - ":"
+                - !Ref S3ObjectChangeEvent
+  GetSignedURLFunction:
+    # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile # This does the trick
+    Properties:
+      FunctionName: !Sub get-signed-url-function
+      Handler: dist/handlers/get-signed-url.handler
+      Environment:
+        Variables:
+          UploadBucket: !Ref LiveLotUploadSnapshotS3
+      Policies:
+        - S3WritePolicy:
+            BucketName: !Ref LiveLotUploadSnapshotS3
+        # This permission allows the Lambda function to request signed URLs
+        # for objects that will be publicly readable. Uncomment if you want this ACL
+        - Statement:
+            - Effect: Allow
+              Resource: !Sub "arn:aws:s3:::${LiveLotUploadSnapshotS3}/"
+              Action:
+                - s3:putObjectAcl
+      Events:
+        UploadAssetAPI:
+          Type: HttpApi
+          Properties:
+            Path: /uploads
+            Method: get
+            ApiId: !Ref LiveLotSnapshotsAPI
+        UploadAssetMetadataAPI:
+          Type: HttpApi
+          Properties:
+            Path: /uploadsMeta
+            Method: post
+            ApiId: !Ref LiveLotSnapshotsAPI
+  ImageUploadedFunction:
+    # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile # This does the trick
+    Properties:
+      FunctionName: !Sub image-uploaded-function
+      Handler: dist/handlers/image-uploaded.handler
+      Environment:
+        Variables:
+          DynamoTable: !Ref ImageMetadataDBTable
+      Policies:
+        - AmazonDynamoDBFullAccess
+      Events:
+        Topic:
+          Type: SNS
+          Properties:
+            Topic: !Ref S3ObjectChangeEvent
+            Region: !Select
+              - 3
+              - !Split
+                - ":"
+                - !Ref S3ObjectChangeEvent
+## Take a note of the outputs for deploying the workflow templates in this sample application
+Outputs:
+  APIendpoint:
+    Description: "HTTP API endpoint URL, this is the url to grab a signed URL for our S3 bucket. \nMake sure to append \"\/uploadsMeta\" when requesting this URL"
+    Value: !Sub "https://${LiveLotSnapshotsAPI}.execute-api.${AWS::Region}.amazonaws.com"
+  UserAPIendpoint:
+    Description: "HTTP API endpoint URL, this is the url for the User service."
+    Value: !Sub "https://${CognitoApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+  LiveLotUploadSnapshotS3Name:
+    Description: "S3 bucket for application uploads"
+    Value: !Ref "LiveLotUploadSnapshotS3"

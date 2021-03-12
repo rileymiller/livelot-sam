@@ -1,0 +1,87 @@
+{
+  "body": "{\n    \"email\": \"dev4@test.com\",\n    \"password\": \"asupersecretpassword\",\n    \"name\": \"dev\",\n    \"phone_number\": \"+12533262278\",\n    \"address\": \"mine\"\n}",
+  "headers": {
+    "Accept": "*/*",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "Content-Length": "150",
+    "Content-Type": "application/json",
+    "Host": "127.0.0.1:3000",
+    "Postman-Token": "4b1489d4-94d8-4368-ba39-677dec2ff0e5",
+    "User-Agent": "PostmanRuntime/7.26.8",
+    "X-Forwarded-Port": "3000",
+    "X-Forwarded-Proto": "http"
+  },
+  "httpMethod": "POST",
+  "isBase64Encoded": false,
+  "multiValueHeaders": {
+    "Accept": [
+      "*/*"
+    ],
+    "Accept-Encoding": [
+      "gzip, deflate, br"
+    ],
+    "Cache-Control": [
+      "no-cache"
+    ],
+    "Connection": [
+      "keep-alive"
+    ],
+    "Content-Length": [
+      "150"
+    ],
+    "Content-Type": [
+      "application/json"
+    ],
+    "Host": [
+      "127.0.0.1:3000"
+    ],
+    "Postman-Token": [
+      "4b1489d4-94d8-4368-ba39-677dec2ff0e5"
+    ],
+    "User-Agent": [
+      "PostmanRuntime/7.26.8"
+    ],
+    "X-Forwarded-Port": [
+      "3000"
+    ],
+    "X-Forwarded-Proto": [
+      "http"
+    ]
+  },
+  "multiValueQueryStringParameters": null,
+  "path": "/signup",
+  "pathParameters": null,
+  "queryStringParameters": null,
+  "requestContext": {
+    "accountId": "123456789012",
+    "apiId": "1234567890",
+    "domainName": "127.0.0.1:3000",
+    "extendedRequestId": null,
+    "httpMethod": "POST",
+    "identity": {
+      "accountId": null,
+      "apiKey": null,
+      "caller": null,
+      "cognitoAuthenticationProvider": null,
+      "cognitoAuthenticationType": null,
+      "cognitoIdentityPoolId": null,
+      "sourceIp": "127.0.0.1",
+      "user": null,
+      "userAgent": "Custom User Agent String",
+      "userArn": null
+    },
+    "path": "/signup",
+    "protocol": "HTTP/1.1",
+    "requestId": "758e95e1-e259-4956-8ec3-3eff69cf803f",
+    "requestTime": "10/Mar/2021:07:14:50 +0000",
+    "requestTimeEpoch": 1615360490,
+    "resourceId": "123456",
+    "resourcePath": "/signup",
+    "stage": "Prod"
+  },
+  "resource": "/signup",
+  "stageVariables": null,
+  "version": "1.0"
+}

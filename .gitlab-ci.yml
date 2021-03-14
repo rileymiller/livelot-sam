@@ -1,0 +1,21 @@
+install:
+  stage: install dependencies
+  script: npm install
+  artifacts:
+    name: "artifacts"
+    untracked: true
+    expire_in: 30 mins
+    paths:
+      - .npm/
+      - node_modules/
+  only:
+    - merge_requests
+
+test:unit:
+  stage: test
+  script:
+    - npm run test
+  dependencies:
+    - install
+  only:
+    - merge_requests

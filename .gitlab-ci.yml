@@ -1,5 +1,5 @@
 install:
-  stage: install dependencies
+  stage: install
   script: npm install
   artifacts:
     name: "artifacts"

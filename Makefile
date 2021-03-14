@@ -38,6 +38,7 @@ build-ImageUploadedFunction:
 
 # ARTIFACTS_DIR is emmitted by the SAM cli
 build-lambda-common:
+	rm -rf node_modules/
 	npm install
 	rm -rf dist
 	echo "{\"extends\": \"./tsconfig.json\", \"include\": [\"${HANDLER}\"] }" > tsconfig-only-handler.json
@@ -49,3 +50,4 @@ build-RuntimeDependenciesLayer:
 	cp package.json package-lock.json "$(ARTIFACTS_DIR)/nodejs/"
 	npm install --production --prefix "$(ARTIFACTS_DIR)/nodejs/"
 	rm "$(ARTIFACTS_DIR)/nodejs/package.json" # to avoid rebuilding when changes don't relate to dependencies
+

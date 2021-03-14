@@ -1,6 +1,14 @@
+image: node:latest
+
 stages:
   - build
   - test
+
+# This folder is cached between builds
+# http://docs.gitlab.com/ee/ci/yaml/README.html#cache
+cache:
+  paths:
+    - node_modules/
 
 build:
   stage: build

@@ -1,19 +1,16 @@
-import AWS from 'aws-sdk'
+import AWS, { S3 } from 'aws-sdk'
 import mime from 'mime-types'
 import { v4 as uuid } from 'uuid'
 
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda'
 
 AWS.config.update({ region: process.env.AWS_REGION })
-const s3 = new AWS.S3()
+
+const s3 = new S3()
 
 // Change this value to adjust the signed URL's expiration
 const URL_EXPIRATION_SECONDS = 300
 
-// Main Lambda entry point
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  return await getUploadURL(event)
-}
 
 const getFileExtension = (filename: string) => {
   if (!filename) {
@@ -45,15 +42,20 @@ type ImageMetaDataPayload = {
 /**
  * The expected request structure of an image upload request object
  */
-type ImageUploadRequestBody = {
+export type ImageUploadRequestBody = {
   cameraID: string
   classifications: string
   creationTime: string
   fileName: string
-  imageHeight: string
-  imageWidth: string
+  imageHeight: number
+  imageWidth: number
   ipAddress: string
   timeStamp: string
+}
+
+// Main Lambda entry point
+export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  return await getUploadURL(event)
 }
 
 const getUploadURL = async function (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
@@ -114,8 +116,7 @@ const getUploadURL = async function (event: APIGatewayProxyEvent): Promise<APIGa
       requestID,
     },
 
-    // This ACL makes the uploaded object publicly readable. You must also uncomment
-    // the extra permission for the Lambda function in the SAM template.
+    // This ACL makes the uploaded object publicly readable.
     ACL: 'public-read'
   }
 

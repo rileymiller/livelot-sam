@@ -2,3 +2,6 @@
 node_modules/
 dist/
 tsconfig-only-handler.json
+
+# generated upload template
+packaged.yaml

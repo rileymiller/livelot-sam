@@ -1,4 +1,4 @@
-install:
+build:
   stage: install
   script: npm install
   artifacts:
@@ -11,7 +11,7 @@ install:
   only:
     - merge_requests
 
-test:unit:
+test:
   stage: test
   script:
     - npm run test

@@ -58,8 +58,6 @@ deploy:production:
     - sam build --parameter-overrides "StageType=prod" "BranchName=master"
     - sam package --output-template-file packaged.yaml --s3-bucket $SAM_S3_BUCKET --s3-prefix $SAM_S3_PREFIX --region us-east-2
     - sam deploy --template-file packaged.yaml --stack-name livelot-sam-prod --s3-bucket $SAM_S3_BUCKET --s3-prefix $SAM_S3_PREFIX --capabilities CAPABILITY_IAM --region us-east-2 --no-confirm-changeset --parameter-overrides "StageType=prod" "BranchName=master"
-  dependencies:
-    - deploy-stage
   only:
     - master
   when: manual

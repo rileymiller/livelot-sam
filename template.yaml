@@ -28,6 +28,9 @@ Parameters:
       - stage
       - prod
     Description: Enter dev, stage, or prod. Default is dev.
+  BranchName:
+    Type: String
+    Description: Enter the feature branch name to spin up a cloud formation stack off your branch
 
 Resources:
   ## Lambdas are like ogres, they have layers
@@ -47,7 +50,7 @@ Resources:
   CognitoApi:
     Type: AWS::Serverless::Api
     Properties:
-      Name: !Sub "${StageType}_LiveLotUserCognitoApi"
+      Name: !Sub "${StageType}_${BranchName}_LiveLotUserCognitoApi"
       StageName: !Sub "${StageType}"
       Cors: "'*'"
       Auth:
@@ -59,7 +62,7 @@ Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: !Sub "${StageType}_LiveLotUserPool"
+      UserPoolName: !Sub "${StageType}_${BranchName}_LiveLotUserPool"
       Policies:
         PasswordPolicy:
           MinimumLength: 8
@@ -69,7 +72,7 @@ Resources:
   UserPoolTokenClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      ClientName: !Sub "${StageType}_LiveLotUserPoolClient"
+      ClientName: !Sub "${StageType}_${BranchName}_LiveLotUserPoolClient"
       UserPoolId: !Ref UserPool
       GenerateSecret: false
 
@@ -77,7 +80,7 @@ Resources:
   UserDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${StageType}_LiveLotUserDBTable"
+      TableName: !Sub "${StageType}_${BranchName}_LiveLotUserDBTable"
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
@@ -91,7 +94,7 @@ Resources:
   AdminPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: !Sub "${StageType}_LiveLotAdminPool"
+      UserPoolName: !Sub "${StageType}_${BranchName}_LiveLotAdminPool"
       Policies:
         PasswordPolicy:
           MinimumLength: 8
@@ -104,7 +107,7 @@ Resources:
   AdminPoolTokenClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      ClientName: !Sub "${StageType}_LiveLotAdminPoolClient"
+      ClientName: !Sub "${StageType}_${BranchName}_LiveLotAdminPoolClient"
       UserPoolId: !Ref AdminPool
       GenerateSecret: false
 
@@ -113,7 +116,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub "${StageType}_AuthFunction"
+      FunctionName: !Sub "${StageType}_${BranchName}_AuthFunction"
       Handler: dist/handlers/user-auth.handler
       Environment:
         Variables:
@@ -154,7 +157,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub "${StageType}_PreSignupFunction"
+      FunctionName: !Sub "${StageType}_${BranchName}_PreSignupFunction"
       Handler: dist/handlers/pre-signup.handler
       Events:
         CognitoUserPoolPreSignup:
@@ -175,7 +178,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub "${StageType}_PostSignupFunction"
+      FunctionName: !Sub "${StageType}_${BranchName}_PostSignupFunction"
       Handler: dist/handlers/post-signup.handler
       Environment:
         Variables:
@@ -195,7 +198,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub "${StageType}_UserCreateFunction"
+      FunctionName: !Sub "${StageType}_${BranchName}_UserCreateFunction"
       Handler: dist/handlers/user-create.handler
       Environment:
         Variables:
@@ -215,7 +218,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub "${StageType}_UserGetAllFunction"
+      FunctionName: !Sub "${StageType}_${BranchName}_UserGetAllFunction"
       Handler: dist/handlers/user-get-all.handler
       Environment:
         Variables:
@@ -238,7 +241,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub "${StageType}_UserGetFunction"
+      FunctionName: !Sub "${StageType}_${BranchName}_UserGetFunction"
       Handler: dist/handlers/user-get.handler
       Environment:
         Variables:
@@ -261,7 +264,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub "${StageType}_UserUpdateFunction"
+      FunctionName: !Sub "${StageType}_${BranchName}_UserUpdateFunction"
       Handler: dist/handlers/user-update.handler
       Environment:
         Variables:
@@ -282,7 +285,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub "${StageType}_UserDeleteFunction"
+      FunctionName: !Sub "${StageType}_${BranchName}_UserDeleteFunction"
       Handler: dist/handlers/user-delete.handler
       Environment:
         Variables:
@@ -303,7 +306,7 @@ Resources:
   S3ObjectChangeEvent:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub "${StageType}_S3ObjectChanged-Topic-${AWS::AccountId}"
+      TopicName: !Sub "${StageType}_${BranchName}_S3ObjectChanged-Topic-${AWS::AccountId}"
 
   # SNS Topic permission
   s3BucketToSNSPermission:
@@ -319,7 +322,7 @@ Resources:
             Resource: !Ref S3ObjectChangeEvent
             Condition:
               ArnEquals:
-                aws:SourceArn: !Sub "arn:${AWS::Partition}:s3:::${StageType}-livelot-upload-bucket-${AWS::AccountId}"
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:s3:::${StageType}-${BranchName}-livelot-upload-bucket-${AWS::AccountId}"
       Topics:
         - !Ref S3ObjectChangeEvent
 
@@ -343,7 +346,7 @@ Resources:
   ImageMetadataDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${StageType}_LiveLotImageMetadataDBTable"
+      TableName: !Sub "${StageType}_${BranchName}_LiveLotImageMetadataDBTable"
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
@@ -360,7 +363,7 @@ Resources:
   LiveLotUploadSnapshotS3:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${StageType}-livelot-upload-bucket-${AWS::AccountId}"
+      BucketName: !Sub "${StageType}-${BranchName}-livelot-upload-bucket-${AWS::AccountId}"
       NotificationConfiguration:
         TopicConfigurations:
           - Event: s3:ObjectCreated:*
@@ -384,7 +387,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub "${StageType}_NotifyDetectionFunction"
+      FunctionName: !Sub "${StageType}_${BranchName}_NotifyDetectionFunction"
       Handler: dist/handlers/notify-detection.handler
       # Tracing: Active
       Policies:
@@ -408,7 +411,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub "${StageType}_GetSignedURLFunction"
+      FunctionName: !Sub "${StageType}_${BranchName}_GetSignedURLFunction"
       Handler: dist/handlers/get-signed-url.handler
       Environment:
         Variables:
@@ -442,7 +445,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub "${StageType}_ImageUploadedFunction"
+      FunctionName: !Sub "${StageType}_${BranchName}_ImageUploadedFunction"
       Handler: dist/handlers/image-uploaded.handler
       Environment:
         Variables:

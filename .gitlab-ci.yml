@@ -33,6 +33,20 @@ test:unit:
   only:
     - merge_requests
 
+deploy:stage:
+  image: nikolaik/python-nodejs
+  stage: deploy
+  before_script:
+    - pip3 install awscli --upgrade
+    - pip3 install aws-sam-cli --upgrade
+  script:
+    - npm run build
+    - sam build --parameter-overrides "StageType=stage"
+    - sam package --output-template-file packaged.yaml --s3-bucket $SAM_S3_BUCKET --s3-prefix $SAM_S3_PREFIX --region us-east-2
+    - sam deploy --template-file packaged.yaml --stack-name livelot-sam-stage --s3-bucket $SAM_S3_BUCKET --s3-prefix $SAM_S3_PREFIX --capabilities CAPABILITY_IAM --region us-east-2 --no-confirm-changeset --parameter-overrides "StageType=stage"
+  only:
+    - master
+
 deploy:production:
   image: nikolaik/python-nodejs
   stage: deploy
@@ -44,5 +58,9 @@ deploy:production:
     - sam build --parameter-overrides "StageType=prod"
     - sam package --output-template-file packaged.yaml --s3-bucket $SAM_S3_BUCKET --s3-prefix $SAM_S3_PREFIX --region us-east-2
     - sam deploy --template-file packaged.yaml --stack-name livelot-sam-prod --s3-bucket $SAM_S3_BUCKET --s3-prefix $SAM_S3_PREFIX --capabilities CAPABILITY_IAM --region us-east-2 --no-confirm-changeset --parameter-overrides "StageType=prod"
-  only:
-    - master
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+      when: never # Prevent pipeline run for push event
+    - if: '$CI_COMMIT_BRANCH == "master"'
+      when: manual # Run pipeline manually on master
+

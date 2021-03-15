@@ -466,7 +466,7 @@ Outputs:
     Value: !Sub "https://${LiveLotSnapshotsAPI}.execute-api.${AWS::Region}.amazonaws.com"
   UserAPIendpoint:
     Description: "HTTP API endpoint URL, this is the url for the User service."
-    Value: !Sub "https://${CognitoApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+    Value: !Sub "https://${CognitoApi}.execute-api.${AWS::Region}.amazonaws.com/${StageType}"
   LiveLotUploadSnapshotS3Name:
     Description: "S3 bucket for application uploads"
     Value: !Ref "LiveLotUploadSnapshotS3"

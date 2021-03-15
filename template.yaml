@@ -16,6 +16,19 @@ Globals:
     MemorySize: 128
     Timeout: 100
 
+####################################################################################################################################################
+### Template Parameters
+####################################################################################################################################################
+Parameters:
+  StageType:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - stage
+      - prod
+    Description: Enter dev, stage, or prod. Default is dev.
+
 Resources:
   ## Lambdas are like ogres, they have layers
   RuntimeDependenciesLayer:
@@ -34,7 +47,8 @@ Resources:
   CognitoApi:
     Type: AWS::Serverless::Api
     Properties:
-      StageName: Prod
+      Name: !Sub "${StageType}_LiveLotUserCognitoApi"
+      StageName: !Sub "${StageType}"
       Cors: "'*'"
       Auth:
         DefaultAuthorizer: MyCognitoAuthorizer
@@ -45,7 +59,7 @@ Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: LiveLotUserPool
+      UserPoolName: !Sub "${StageType}_LiveLotUserPool"
       Policies:
         PasswordPolicy:
           MinimumLength: 8
@@ -55,6 +69,7 @@ Resources:
   UserPoolTokenClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
+      ClientName: !Sub "${StageType}_LiveLotUserPoolClient"
       UserPoolId: !Ref UserPool
       GenerateSecret: false
 
@@ -62,6 +77,7 @@ Resources:
   UserDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
+      TableName: !Sub "${StageType}_LiveLotUserDBTable"
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
@@ -75,7 +91,7 @@ Resources:
   AdminPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: LiveLotAdminPool
+      UserPoolName: !Sub "${StageType}_LiveLotAdminPool"
       Policies:
         PasswordPolicy:
           MinimumLength: 8
@@ -88,6 +104,7 @@ Resources:
   AdminPoolTokenClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
+      ClientName: !Sub "${StageType}_LiveLotAdminPoolClient"
       UserPoolId: !Ref AdminPool
       GenerateSecret: false
 
@@ -96,7 +113,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub aut-function
+      FunctionName: !Sub "${StageType}_AuthFunction"
       Handler: dist/handlers/user-auth.handler
       Environment:
         Variables:
@@ -137,6 +154,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
+      FunctionName: !Sub "${StageType}_PreSignupFunction"
       Handler: dist/handlers/pre-signup.handler
       Events:
         CognitoUserPoolPreSignup:
@@ -157,6 +175,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
+      FunctionName: !Sub "${StageType}_PostSignupFunction"
       Handler: dist/handlers/post-signup.handler
       Environment:
         Variables:
@@ -176,7 +195,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub user-create-function
+      FunctionName: !Sub "${StageType}_UserCreateFunction"
       Handler: dist/handlers/user-create.handler
       Environment:
         Variables:
@@ -196,7 +215,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub user-get-all-function
+      FunctionName: !Sub "${StageType}_UserGetAllFunction"
       Handler: dist/handlers/user-get-all.handler
       Environment:
         Variables:
@@ -219,7 +238,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub user-get-function
+      FunctionName: !Sub "${StageType}_UserGetFunction"
       Handler: dist/handlers/user-get.handler
       Environment:
         Variables:
@@ -242,7 +261,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub user-update-function
+      FunctionName: !Sub "${StageType}_UserUpdateFunction"
       Handler: dist/handlers/user-update.handler
       Environment:
         Variables:
@@ -263,7 +282,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub user-delete-function
+      FunctionName: !Sub "${StageType}_UserDeleteFunction"
       Handler: dist/handlers/user-delete.handler
       Environment:
         Variables:
@@ -280,6 +299,30 @@ Resources:
   ####################################################################################################################################
   ### Image Upload Service
   ####################################################################################################################################
+  # SNS image uploaded topic
+  S3ObjectChangeEvent:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${StageType}_S3ObjectChanged-Topic-${AWS::AccountId}"
+
+  # SNS Topic permission
+  s3BucketToSNSPermission:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref S3ObjectChangeEvent
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:s3:::${StageType}-livelot-upload-bucket-${AWS::AccountId}"
+      Topics:
+        - !Ref S3ObjectChangeEvent
+
   # HTTP API to upload our images
   LiveLotSnapshotsAPI:
     Type: AWS::Serverless::HttpApi
@@ -300,6 +343,7 @@ Resources:
   ImageMetadataDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
+      TableName: !Sub "${StageType}_LiveLotImageMetadataDBTable"
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
@@ -311,11 +355,12 @@ Resources:
         WriteCapacityUnits: 5
       StreamSpecification:
         StreamViewType: NEW_IMAGE
+
   # ## S3 bucket
   LiveLotUploadSnapshotS3:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub livelot-upload-bucket-${AWS::AccountId}
+      BucketName: !Sub "${StageType}-livelot-upload-bucket-${AWS::AccountId}"
       NotificationConfiguration:
         TopicConfigurations:
           - Event: s3:ObjectCreated:*
@@ -331,34 +376,15 @@ Resources:
             AllowedOrigins:
               - "*"
     DependsOn:
-      - BucketToSNSPermission
-  S3ObjectChangeEvent:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: !Sub S3ObjectChanged-Topic-${AWS::AccountId}
-  BucketToSNSPermission:
-    Type: AWS::SNS::TopicPolicy
-    Properties:
-      PolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: s3.amazonaws.com
-            Action: sns:Publish
-            Resource: !Ref S3ObjectChangeEvent
-            Condition:
-              ArnEquals:
-                aws:SourceArn: !Sub arn:${AWS::Partition}:s3:::livelot-upload-bucket-${AWS::AccountId}
-      Topics:
-        - !Ref S3ObjectChangeEvent
+      - s3BucketToSNSPermission
+
   ## Lambda functions
   NotifyDetectionFunction:
     Type: AWS::Serverless::Function
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub notify-detection-function
+      FunctionName: !Sub "${StageType}_NotifyDetectionFunction"
       Handler: dist/handlers/notify-detection.handler
       # Tracing: Active
       Policies:
@@ -382,7 +408,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub get-signed-url-function
+      FunctionName: !Sub "${StageType}_GetSignedURLFunction"
       Handler: dist/handlers/get-signed-url.handler
       Environment:
         Variables:
@@ -416,7 +442,7 @@ Resources:
     Metadata:
       BuildMethod: makefile # This does the trick
     Properties:
-      FunctionName: !Sub image-uploaded-function
+      FunctionName: !Sub "${StageType}_ImageUploadedFunction"
       Handler: dist/handlers/image-uploaded.handler
       Environment:
         Variables:

@@ -48,11 +48,12 @@ type UserTableRecord = {
 const sendMessageViaTwilio = async (phone_number: string, s3URL: string) => {
   // Send a text message
 
-  const accountSid = `AC5fdff3b5352a5c28141033dbe87274a9`
+  const accountSid = ``
 
-  const authToken = `a268a9882aeea764e2e51dbb4e8258fb`
+  const authToken = ``
 
-  const twilioNumber = `+15855677108`
+  const twilioNumber = ``
+
   const client = Twilio(accountSid, authToken)
 
   try {
